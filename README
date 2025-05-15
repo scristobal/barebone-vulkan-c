@@ -1,3 +1,2 @@
-Following https://vulkan-tutorial.com but in C instead of C++
-
+# setup
 $ pacman -S vulkan-devel glfw cglm 
