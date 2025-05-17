@@ -1,3 +1,4 @@
+#include "helpers.c"
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -45,11 +46,7 @@ bool checkValidationLayerSupport() {
     if (availableLayerCount > 256)
         availableLayerCount = 256;
 
-    // fprintf(stdout, "There are %d avaiable layers:\n", availableLayerCount);
-    // for (uint32_t i; i < availableLayerCount; i++) {
-    //     fprintf(stdout, "\t%s\n", availableLayers[i].layerName);
-    // }
-    // fprintf(stdout, "\n");
+    // displayAvailableLayers(availableLayerCount, availableLayers);
 
     for (uint32_t i; i < validationLayerCount; i++) {
         bool layerFound = false;
@@ -207,11 +204,7 @@ VkInstance createInstance() {
     createInfo.enabledExtensionCount = extensionCount;
     createInfo.ppEnabledExtensionNames = extensions;
 
-    // fprintf(stdout, "Number of required extensions %d:\n", extensionCount);
-    // for (uint32_t i; i < extensionCount; i++) {
-    //     fprintf(stdout, "\t%s\n", extensions[i]);
-    // }
-    // fprintf(stdout, "\n");
+    // displayRequiredEXT(extensionCount, extensions);
 
     VkInstance instance;
 
@@ -239,30 +232,7 @@ int main() {
     VkInstance instance = createInstance();
     VkDebugUtilsMessengerEXT debugMessenger = setupDebugMessenger(instance);
 
-    uint32_t extensionCount = 0;
-    VkExtensionProperties extensions[256];
-
-    if (vkEnumerateInstanceExtensionProperties(NULL, &extensionCount, NULL) !=
-        VK_SUCCESS) {
-        fprintf(stderr, "ERROR: failed to query extensions\n");
-        exit(1);
-    }
-
-    if (extensionCount > 256) {
-        extensionCount = 256; // truncate to fit on array
-    }
-
-    if (vkEnumerateInstanceExtensionProperties(NULL, &extensionCount,
-                                               extensions) != VK_SUCCESS) {
-        fprintf(stderr, "ERROR: failed to query extensions\n");
-        exit(1);
-    }
-
-    // fprintf(stdout, "Your system supports %d extensions:\n", extensionCount);
-    // for (uint32_t i = 0; i < extensionCount; i++) {
-    //     fprintf(stdout, "\t%s\n", extensions[i].extensionName);
-    // }
-    // fprintf(stdout, "\n");
+    // displayEXT();
 
     // random code to test cglm works
     mat4 matrix;
