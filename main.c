@@ -145,7 +145,7 @@ VkDebugUtilsMessengerEXT setupDebugMessenger(VkInstance instance) {
 
     if (CreateDebugUtilsMessengerEXT(instance, &createInfo, NULL,
                                      &debugMessenger) != VK_SUCCESS) {
-        fprintf(stderr, "failed to set up debug messenger.\n");
+        fprintf(stderr, "ERROR: failed to set up debug messenger.\n");
         exit(1);
     }
 
@@ -216,6 +216,48 @@ VkInstance createInstance() {
     return instance;
 };
 
+bool isDeviceSuitable(VkPhysicalDevice device) {
+
+    VkPhysicalDeviceProperties deviceProps;
+    vkGetPhysicalDeviceProperties(device, &deviceProps);
+
+    fprintf(stdout, "physical device found: %s\n", deviceProps.deviceName);
+    return deviceProps.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
+}
+
+VkPhysicalDevice pickPhysicalDevice(VkInstance instance) {
+
+    VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
+
+    uint32_t deviceCount = 0;
+    vkEnumeratePhysicalDevices(instance, &deviceCount, NULL);
+
+    if (deviceCount == 0) {
+        fprintf(stderr, "ERROR: failed to find GPUs with Vulkan support.\n");
+        exit(1);
+    }
+
+    VkPhysicalDevice devices[256];
+    vkEnumeratePhysicalDevices(instance, &deviceCount, devices);
+
+    if (deviceCount > 256)
+        deviceCount = 256;
+
+    for (uint32_t i = 0; i < deviceCount; i++) {
+        if (isDeviceSuitable(devices[i])) {
+            physicalDevice = devices[i];
+            break;
+        }
+    }
+
+    if (physicalDevice == VK_NULL_HANDLE) {
+        fprintf(stderr, "ERROR: failed to find a suitable GPU.\n");
+        exit(1);
+    }
+
+    return physicalDevice;
+}
+
 void cleanup(GLFWwindow *window, VkInstance instance,
              VkDebugUtilsMessengerEXT debugMessenger) {
     if (enableValidationLayers) {
@@ -231,6 +273,7 @@ int main() {
     GLFWwindow *window = initWindow();
     VkInstance instance = createInstance();
     VkDebugUtilsMessengerEXT debugMessenger = setupDebugMessenger(instance);
+    VkPhysicalDevice physicalDevice = pickPhysicalDevice(instance);
 
     // displayEXT();
 
