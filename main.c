@@ -40,11 +40,8 @@ bool checkValidationLayerSupport() {
     uint32_t availableLayerCount;
     vkEnumerateInstanceLayerProperties(&availableLayerCount, NULL);
 
-    VkLayerProperties availableLayers[256];
+    VkLayerProperties availableLayers[availableLayerCount];
     vkEnumerateInstanceLayerProperties(&availableLayerCount, availableLayers);
-
-    if (availableLayerCount > 256)
-        availableLayerCount = 256;
 
     // displayAvailableLayers(availableLayerCount, availableLayers);
 
@@ -216,17 +213,43 @@ VkInstance createInstance() {
     return instance;
 };
 
-bool isDeviceSuitable(VkPhysicalDevice device) {
+typedef struct {
+    bool has_value;
+    uint32_t graphicsFamily;
+} QueueFamilyIndices;
 
+QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device) {
+    QueueFamilyIndices indices = {.has_value = false};
+
+    uint32_t queueFamilyCount;
+    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, NULL);
+
+    VkQueueFamilyProperties queueFamilies[queueFamilyCount];
+    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount,
+                                             queueFamilies);
+
+    for (uint32_t i = 0; i < queueFamilyCount; i++) {
+        if (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+            indices.graphicsFamily = i;
+            indices.has_value = true;
+
+            return indices;
+        }
+    }
+
+    return indices;
+}
+
+bool isDeviceSuitable(VkPhysicalDevice device) {
     VkPhysicalDeviceProperties deviceProps;
     vkGetPhysicalDeviceProperties(device, &deviceProps);
 
-    fprintf(stdout, "physical device found: %s\n", deviceProps.deviceName);
-    return deviceProps.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
+    QueueFamilyIndices indices = findQueueFamilies(device);
+    return (deviceProps.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
+            indices.has_value);
 }
 
 VkPhysicalDevice pickPhysicalDevice(VkInstance instance) {
-
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
 
     uint32_t deviceCount = 0;
@@ -237,11 +260,10 @@ VkPhysicalDevice pickPhysicalDevice(VkInstance instance) {
         exit(1);
     }
 
-    VkPhysicalDevice devices[256];
+    VkPhysicalDevice devices[deviceCount];
     vkEnumeratePhysicalDevices(instance, &deviceCount, devices);
 
-    if (deviceCount > 256)
-        deviceCount = 256;
+    // displayDevices(devices, deviceCount);
 
     for (uint32_t i = 0; i < deviceCount; i++) {
         if (isDeviceSuitable(devices[i])) {
@@ -254,6 +276,9 @@ VkPhysicalDevice pickPhysicalDevice(VkInstance instance) {
         fprintf(stderr, "ERROR: failed to find a suitable GPU.\n");
         exit(1);
     }
+
+    fprintf(stdout, "using ");
+    displayDevice(&physicalDevice);
 
     return physicalDevice;
 }

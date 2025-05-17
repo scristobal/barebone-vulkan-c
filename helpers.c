@@ -45,3 +45,18 @@ void displayAvailableLayers(uint32_t availableLayerCount,
     }
     fprintf(stdout, "\n");
 }
+
+void displayDevice(VkPhysicalDevice *device) {
+
+    VkPhysicalDeviceProperties deviceProps;
+    vkGetPhysicalDeviceProperties(*device, &deviceProps);
+
+    fprintf(stdout, "physical device: %s\n", deviceProps.deviceName);
+}
+
+void displayDevices(VkPhysicalDevice *devices, uint32_t deviceCount) {
+
+    for (uint32_t i = 0; i < deviceCount; i++) {
+        displayDevice(&devices[i]);
+    }
+}
