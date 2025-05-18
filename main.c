@@ -283,12 +283,58 @@ VkPhysicalDevice pickPhysicalDevice(VkInstance instance) {
     return physicalDevice;
 }
 
-void cleanup(GLFWwindow *window, VkInstance instance,
+VkDevice createLogicalDevice(VkPhysicalDevice physicalDevice) {
+    QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
+
+    VkDeviceQueueCreateInfo queueCreateInfo = {};
+    queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    queueCreateInfo.queueFamilyIndex = indices.graphicsFamily;
+    queueCreateInfo.queueCount = 1;
+    float queuePriority = 1.0f;
+    queueCreateInfo.pQueuePriorities = &queuePriority;
+
+    VkPhysicalDeviceFeatures deviceFeatures = {};
+
+    VkDeviceCreateInfo createInfo = {};
+    createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    createInfo.pQueueCreateInfos = &queueCreateInfo;
+    createInfo.queueCreateInfoCount = 1;
+    createInfo.pEnabledFeatures = &deviceFeatures;
+    createInfo.enabledExtensionCount = 0;
+
+    if (enableValidationLayers) {
+        createInfo.enabledLayerCount = validationLayerCount;
+        createInfo.ppEnabledLayerNames = validationLayers;
+    } else {
+        createInfo.enabledLayerCount = 0;
+    }
+
+    VkDevice device;
+
+    if (vkCreateDevice(physicalDevice, &createInfo, NULL, &device) !=
+        VK_SUCCESS) {
+        fprintf(stderr, "ERROR: failed to create logical device.\n");
+        exit(1);
+    }
+
+    return device;
+}
+
+VkQueue getGraphicsQueue(VkDevice device, VkPhysicalDevice physicalDevice) {
+    VkQueue graphicsQueue;
+    QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
+    vkGetDeviceQueue(device, indices.graphicsFamily, 0, &graphicsQueue);
+    return graphicsQueue;
+}
+
+void cleanup(GLFWwindow *window, VkInstance instance, VkDevice device,
              VkDebugUtilsMessengerEXT debugMessenger) {
+
     if (enableValidationLayers) {
         DestroyDebugUtilsMessengerEXT(instance, debugMessenger, NULL);
     }
 
+    vkDestroyDevice(device, NULL);
     vkDestroyInstance(instance, NULL);
     glfwDestroyWindow(window);
     glfwTerminate();
@@ -299,6 +345,8 @@ int main() {
     VkInstance instance = createInstance();
     VkDebugUtilsMessengerEXT debugMessenger = setupDebugMessenger(instance);
     VkPhysicalDevice physicalDevice = pickPhysicalDevice(instance);
+    VkDevice device = createLogicalDevice(physicalDevice);
+    VkQueue graphicsQueue = getGraphicsQueue(device,  physicalDevice);
 
     // displayEXT();
 
@@ -312,7 +360,7 @@ int main() {
         glfwPollEvents();
     }
 
-    cleanup(window, instance, debugMessenger);
+    cleanup(window, instance, device, debugMessenger);
 
     return 0;
 }
