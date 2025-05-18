@@ -64,29 +64,28 @@ bool checkValidationLayerSupport() {
     return true;
 }
 
-void getRequiredExtensions(uint32_t *extensionCount, const char ***extensions) {
+const char **getRequiredExtensions(uint32_t *extensionCount) {
     const char **required;
+
     required = glfwGetRequiredInstanceExtensions(extensionCount);
 
-    *extensions = required;
-
     if (!enableValidationLayers) {
-        return;
+        return required;
     }
 
     const char **result = malloc((*extensionCount + 1) * sizeof(const char *));
+    // no free called, must outlive instance which is end of program
+
     if (!result) {
-        return;
+        return required;
     }
 
-    for (uint32_t i; i < *extensionCount; i++) {
-        result[i] = required[i];
-    }
+    memcpy(result, required, *extensionCount * sizeof(const char *));
 
     result[*extensionCount] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
     ++*extensionCount;
 
-    *extensions = result;
+    return result;
 }
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL
@@ -194,9 +193,7 @@ VkInstance createInstance() {
     }
 
     uint32_t extensionCount;
-    const char **extensions;
-
-    getRequiredExtensions(&extensionCount, &extensions);
+    const char **extensions = getRequiredExtensions(&extensionCount);
 
     createInfo.enabledExtensionCount = extensionCount;
     createInfo.ppEnabledExtensionNames = extensions;
@@ -346,7 +343,7 @@ int main() {
     VkDebugUtilsMessengerEXT debugMessenger = setupDebugMessenger(instance);
     VkPhysicalDevice physicalDevice = pickPhysicalDevice(instance);
     VkDevice device = createLogicalDevice(physicalDevice);
-    VkQueue graphicsQueue = getGraphicsQueue(device,  physicalDevice);
+    VkQueue graphicsQueue = getGraphicsQueue(device, physicalDevice);
 
     // displayEXT();
 
