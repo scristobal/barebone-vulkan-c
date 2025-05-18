@@ -446,22 +446,129 @@ VkQueue getPresentationQueue(VkDevice device, VkPhysicalDevice physicalDevice,
     return presentationQueue;
 }
 
-void createSwapchain(VkPhysicalDevice device, VkSurfaceKHR surface) {
-    VkSurfaceCapabilitiesKHR capabilities;
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &capabilities);
-
+VkSurfaceFormatKHR chooseSurfaceFormat(VkPhysicalDevice device,
+                                       VkSurfaceKHR surface) {
     uint32_t formatCount;
     vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, NULL);
 
     VkSurfaceFormatKHR formats[formatCount];
     vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount,
                                          formats);
+    for (uint32_t i = 0; i < formatCount; i++) {
+        if (formats[i].format == VK_FORMAT_B8G8R8A8_SRGB &&
+            formats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+            return formats[i];
+        }
+    }
+
+    return formats[0];
+}
+
+VkPresentModeKHR choosePresentMode(VkPhysicalDevice device,
+                                   VkSurfaceKHR surface) {
+
     uint32_t presentModeCount;
     vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface,
                                               &presentModeCount, NULL);
     VkPresentModeKHR presetModes[presentModeCount];
     vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface,
                                               &presentModeCount, presetModes);
+
+    for (uint32_t i = 0; i < presentModeCount; i++) {
+        if (presetModes[i] == VK_PRESENT_MODE_MAX_ENUM_KHR) {
+            return presetModes[i];
+        }
+    }
+
+    return VK_PRESENT_MODE_FIFO_KHR;
+}
+
+VkExtent2D chooseExtent(VkPhysicalDevice device, VkSurfaceKHR surface,
+                        GLFWwindow *window) {
+    VkSurfaceCapabilitiesKHR capabilities;
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &capabilities);
+
+    if (capabilities.currentExtent.width != UINT32_MAX) {
+        return capabilities.currentExtent;
+    } else {
+        int width, height;
+        glfwGetFramebufferSize(window, &width, &height);
+
+        VkExtent2D actualExtent = {(uint32_t)width, (uint32_t)height};
+
+        if (actualExtent.width < capabilities.minImageExtent.width) {
+            actualExtent.width = capabilities.minImageExtent.width;
+        }
+
+        if (actualExtent.width > capabilities.maxImageExtent.width) {
+            actualExtent.width = capabilities.maxImageExtent.width;
+        }
+
+        if (actualExtent.height < capabilities.minImageExtent.height) {
+            actualExtent.height = capabilities.minImageExtent.height;
+        }
+
+        if (actualExtent.height > capabilities.maxImageExtent.height) {
+            actualExtent.height = capabilities.maxImageExtent.height;
+        }
+        return actualExtent;
+    }
+}
+
+VkSwapchainKHR createSwapchain(VkDevice device, VkPhysicalDevice physicalDevice,
+                               VkSurfaceKHR surface, VkSurfaceFormatKHR format,
+                               VkExtent2D extent,
+                               VkPresentModeKHR presentMode) {
+    VkSurfaceCapabilitiesKHR capabilities;
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface,
+                                              &capabilities);
+
+    uint32_t imageCount = capabilities.minImageCount + 1;
+
+    if (capabilities.maxImageCount > 0 &&
+        imageCount > capabilities.maxImageCount) {
+        imageCount = capabilities.maxImageCount;
+    }
+    VkSwapchainCreateInfoKHR createInfo = {};
+    createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+    createInfo.surface = surface;
+    createInfo.minImageCount = imageCount;
+    createInfo.imageFormat = format.format;
+    createInfo.imageColorSpace = format.colorSpace;
+    createInfo.imageExtent = extent;
+    createInfo.imageArrayLayers = 1;
+    createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+    uint32_t graphicsFamily = getGraphicsFamily(physicalDevice);
+    uint32_t presentFamily = getPresentationFamily(physicalDevice, surface);
+
+    uint32_t queueFamilyIndices[] = {graphicsFamily, presentFamily};
+
+    if (graphicsFamily != presentFamily) {
+        createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+        createInfo.queueFamilyIndexCount = 2;
+        createInfo.pQueueFamilyIndices = queueFamilyIndices;
+    } else {
+        createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        createInfo.queueFamilyIndexCount = 1;
+        createInfo.pQueueFamilyIndices = NULL;
+    }
+
+    createInfo.preTransform = capabilities.currentTransform;
+    createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    createInfo.presentMode = presentMode;
+    createInfo.clipped = VK_TRUE;
+    createInfo.oldSwapchain = VK_NULL_HANDLE;
+
+    VkSwapchainKHR swapchain;
+
+    if (vkCreateSwapchainKHR(device, &createInfo, NULL, &swapchain) !=
+        VK_SUCCESS) {
+        fprintf(stderr, "ERROR: failed to create Swapchain.\n");
+        exit(1);
+    }
+
+    return swapchain;
 }
 
 int main() {
@@ -481,13 +588,25 @@ int main() {
     };
 
     VkSurfaceKHR surface = createSurface(instance, window);
+
     VkPhysicalDevice physicalDevice = pickPhysicalDevice(instance, surface);
     VkDevice device = createLogicalDevice(physicalDevice, surface);
+
     VkQueue graphicsQueue = getGraphicsQueue(device, physicalDevice);
     VkQueue presentationQueue =
         getPresentationQueue(device, physicalDevice, surface);
 
-    createSwapchain(physicalDevice, surface);
+    VkSurfaceFormatKHR format = chooseSurfaceFormat(physicalDevice, surface);
+    VkPresentModeKHR presentMode = choosePresentMode(physicalDevice, surface);
+    VkExtent2D extent = chooseExtent(physicalDevice, surface, window);
+
+    VkSwapchainKHR swapchain = createSwapchain(device, physicalDevice, surface,
+                                               format, extent, presentMode);
+
+    uint32_t imageCount;
+    vkGetSwapchainImagesKHR(device, swapchain, &imageCount, NULL);
+    VkImage swapchainImages[imageCount];
+    vkGetSwapchainImagesKHR(device, swapchain, &imageCount, swapchainImages);
 
     // random code to test cglm works
     mat4 matrix;
@@ -500,6 +619,7 @@ int main() {
         glfwPollEvents();
     }
 
+    vkDestroySwapchainKHR(device, swapchain, NULL);
     vkDestroyDevice(device, NULL);
     vkDestroySurfaceKHR(instance, surface, NULL);
 
