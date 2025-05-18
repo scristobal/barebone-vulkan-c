@@ -24,18 +24,10 @@ const bool enableValidationLayers = true;
 #endif
 
 const char *validationLayers[] = {"VK_LAYER_KHRONOS_validation"};
+const uint32_t validationLayerCount = 1;
 
-const uint32_t validationLayerCount =
-    sizeof(validationLayers) / sizeof(validationLayers[0]);
-
-GLFWwindow *initWindow() {
-    glfwInit();
-
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-
-    return glfwCreateWindow(WIDTH, HEIGHT, "Vulkan window", NULL, NULL);
-}
+const char *deviceExtensions[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+const uint32_t deviceExtensionsCount = 1;
 
 bool checkValidationLayerSupport() {
     uint32_t availableLayerCount;
@@ -49,8 +41,8 @@ bool checkValidationLayerSupport() {
     for (uint32_t i; i < validationLayerCount; i++) {
         bool layerFound = false;
 
-        for (uint32_t i = 0; i < availableLayerCount; i++) {
-            if (strcmp(validationLayers[i], availableLayers[i].layerName) ==
+        for (uint32_t j = 0; j < availableLayerCount; j++) {
+            if (strcmp(validationLayers[i], availableLayers[j].layerName) ==
                 0) {
                 layerFound = true;
                 break;
@@ -65,28 +57,34 @@ bool checkValidationLayerSupport() {
     return true;
 }
 
-const char **getRequiredExtensions(uint32_t *extensionCount) {
-    const char **required;
+bool checkDeviceExtensionSupport(VkPhysicalDevice device) {
+    uint32_t availableExtensionCount;
+    vkEnumerateDeviceExtensionProperties(device, NULL, &availableExtensionCount,
+                                         NULL);
 
-    required = glfwGetRequiredInstanceExtensions(extensionCount);
+    VkExtensionProperties availableExtensions[availableExtensionCount];
+    vkEnumerateDeviceExtensionProperties(device, NULL, &availableExtensionCount,
+                                         availableExtensions);
 
-    if (!enableValidationLayers) {
-        return required;
+    // displayAvailableExtensions(availableExtensionCount, availableExtensions);
+
+    for (uint32_t i = 0; i < deviceExtensionsCount; i++) {
+        bool supported = false;
+
+        for (uint32_t j = 0; j < availableExtensionCount; j++) {
+            if (strcmp(deviceExtensions[i],
+                       availableExtensions[j].extensionName) == 0) {
+                supported = true;
+                break;
+            }
+        }
+
+        if (!supported) {
+            return false;
+        }
     }
 
-    const char **result = malloc((*extensionCount + 1) * sizeof(const char *));
-    // no free called, must outlive instance which is end of program
-
-    if (!result) {
-        return required;
-    }
-
-    memcpy(result, required, *extensionCount * sizeof(const char *));
-
-    result[*extensionCount] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
-    ++*extensionCount;
-
-    return result;
+    return true;
 }
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL
@@ -132,10 +130,6 @@ void populateDebugMessengerCreateInfo(
 VkDebugUtilsMessengerEXT setupDebugMessenger(VkInstance instance) {
     VkDebugUtilsMessengerEXT debugMessenger;
 
-    if (!enableValidationLayers) {
-        return debugMessenger;
-    }
-
     VkDebugUtilsMessengerCreateInfoEXT createInfo = {};
 
     populateDebugMessengerCreateInfo(&createInfo);
@@ -161,13 +155,40 @@ void DestroyDebugUtilsMessengerEXT(VkInstance instance,
     }
 }
 
-VkInstance createInstance() {
-    if (enableValidationLayers && !checkValidationLayerSupport()) {
-        fprintf(stderr,
-                "ERROR: validation layers requested, but not available\n");
-        exit(1);
+GLFWwindow *initWindow() {
+    glfwInit();
+
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+
+    return glfwCreateWindow(WIDTH, HEIGHT, "Vulkan window", NULL, NULL);
+}
+
+const char **getRequiredExtensions(uint32_t *extensionCount) {
+    const char **required;
+
+    required = glfwGetRequiredInstanceExtensions(extensionCount);
+
+    if (!enableValidationLayers) {
+        return required;
     }
 
+    const char **result = malloc((*extensionCount + 1) * sizeof(const char *));
+    // no free called, must outlive instance which is end of program
+
+    if (!result) {
+        return required;
+    }
+
+    memcpy(result, required, *extensionCount * sizeof(const char *));
+
+    result[*extensionCount] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
+    ++*extensionCount;
+
+    return result;
+}
+
+VkInstance createInstance() {
     VkApplicationInfo appInfo = {};
     appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     appInfo.pApplicationName = "Hello Triangle";
@@ -193,7 +214,7 @@ VkInstance createInstance() {
         createInfo.pNext = NULL;
     }
 
-    // displayEXT();
+    // displayInstanceExtensions();
 
     uint32_t extensionCount;
     const char **extensions = getRequiredExtensions(&extensionCount);
@@ -201,7 +222,7 @@ VkInstance createInstance() {
     createInfo.enabledExtensionCount = extensionCount;
     createInfo.ppEnabledExtensionNames = extensions;
 
-    // displayRequiredEXT(extensionCount, extensions);
+    // displayRequiredInstanceExtensions(extensionCount, extensions);
 
     VkInstance instance;
 
@@ -212,6 +233,17 @@ VkInstance createInstance() {
 
     return instance;
 };
+
+VkSurfaceKHR createSurface(VkInstance instance, GLFWwindow *window) {
+    VkSurfaceKHR surface;
+
+    if (glfwCreateWindowSurface(instance, window, NULL, &surface) !=
+        VK_SUCCESS) {
+        fprintf(stderr, "ERROR: failed to create window surface.\n");
+    }
+
+    return surface;
+}
 
 int32_t getGraphicsFamily(VkPhysicalDevice device) {
 
@@ -232,7 +264,6 @@ int32_t getGraphicsFamily(VkPhysicalDevice device) {
 }
 
 int32_t getPresentationFamily(VkPhysicalDevice device, VkSurfaceKHR surface) {
-
     uint32_t queueFamilyCount;
     vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, NULL);
 
@@ -241,7 +272,6 @@ int32_t getPresentationFamily(VkPhysicalDevice device, VkSurfaceKHR surface) {
                                              queueFamilies);
 
     for (uint32_t i = 0; i < queueFamilyCount; i++) {
-
         VkBool32 presentSupport;
         vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface,
                                              &presentSupport);
@@ -258,9 +288,27 @@ bool isDeviceSuitable(VkPhysicalDevice device, VkSurfaceKHR surface) {
     VkPhysicalDeviceProperties deviceProps;
     vkGetPhysicalDeviceProperties(device, &deviceProps);
 
-    return (deviceProps.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
-            getGraphicsFamily(device) != -1 &&
-            getPresentationFamily(device, surface) != -1);
+    if (deviceProps.deviceType != VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
+        return false;
+
+    if (!checkDeviceExtensionSupport(device)) {
+        return false;
+    }
+
+    uint32_t formatCount;
+    vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, NULL);
+
+    uint32_t presentationCount;
+    vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface,
+                                              &presentationCount, NULL);
+    if (formatCount == 0 || presentationCount == 0)
+        return false;
+
+    if (getGraphicsFamily(device) == -1 ||
+        getPresentationFamily(device, surface) == -1)
+        return false;
+
+    return true;
 }
 
 VkPhysicalDevice pickPhysicalDevice(VkInstance instance, VkSurfaceKHR surface) {
@@ -342,10 +390,13 @@ VkDevice createLogicalDevice(VkPhysicalDevice physicalDevice,
 
     VkDeviceCreateInfo createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+
     createInfo.pQueueCreateInfos = queueCreateInfos;
     createInfo.queueCreateInfoCount = queueCreateInfoCount;
     createInfo.pEnabledFeatures = &deviceFeatures;
-    createInfo.enabledExtensionCount = 0;
+
+    createInfo.ppEnabledExtensionNames = deviceExtensions;
+    createInfo.enabledExtensionCount = 1;
 
     if (enableValidationLayers) {
         createInfo.enabledLayerCount = validationLayerCount;
@@ -395,35 +446,40 @@ VkQueue getPresentationQueue(VkDevice device, VkPhysicalDevice physicalDevice,
     return presentationQueue;
 }
 
-VkSurfaceKHR createSurface(VkInstance instance, GLFWwindow *window) {
-    VkSurfaceKHR surface;
+void createSwapchain(VkPhysicalDevice device, VkSurfaceKHR surface) {
+    VkSurfaceCapabilitiesKHR capabilities;
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &capabilities);
 
-    if (glfwCreateWindowSurface(instance, window, NULL, &surface) !=
-        VK_SUCCESS) {
-        fprintf(stderr, "ERROR: failed to create window surface.\n");
-    }
+    uint32_t formatCount;
+    vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, NULL);
 
-    return surface;
-}
-
-void cleanup(GLFWwindow *window, VkInstance instance, VkDevice device,
-             VkSurfaceKHR surface, VkDebugUtilsMessengerEXT debugMessenger) {
-
-    if (enableValidationLayers) {
-        DestroyDebugUtilsMessengerEXT(instance, debugMessenger, NULL);
-    }
-
-    vkDestroyDevice(device, NULL);
-    vkDestroySurfaceKHR(instance, surface, NULL);
-    vkDestroyInstance(instance, NULL);
-    glfwDestroyWindow(window);
-    glfwTerminate();
+    VkSurfaceFormatKHR formats[formatCount];
+    vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount,
+                                         formats);
+    uint32_t presentModeCount;
+    vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface,
+                                              &presentModeCount, NULL);
+    VkPresentModeKHR presetModes[presentModeCount];
+    vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface,
+                                              &presentModeCount, presetModes);
 }
 
 int main() {
     GLFWwindow *window = initWindow();
+
+    if (enableValidationLayers && !checkValidationLayerSupport()) {
+        fprintf(stderr,
+                "ERROR: validation layers requested, but not available\n");
+        exit(1);
+    }
+
     VkInstance instance = createInstance();
-    VkDebugUtilsMessengerEXT debugMessenger = setupDebugMessenger(instance);
+    VkDebugUtilsMessengerEXT debugMessenger;
+
+    if (enableValidationLayers) {
+        debugMessenger = setupDebugMessenger(instance);
+    };
+
     VkSurfaceKHR surface = createSurface(instance, window);
     VkPhysicalDevice physicalDevice = pickPhysicalDevice(instance, surface);
     VkDevice device = createLogicalDevice(physicalDevice, surface);
@@ -431,17 +487,29 @@ int main() {
     VkQueue presentationQueue =
         getPresentationQueue(device, physicalDevice, surface);
 
+    createSwapchain(physicalDevice, surface);
+
     // random code to test cglm works
     mat4 matrix;
     vec4 vec;
     vec4 res;
     glm_mat4_mulv(matrix, vec, res);
 
+    // main loop
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
     }
 
-    cleanup(window, instance, device, surface, debugMessenger);
+    vkDestroyDevice(device, NULL);
+    vkDestroySurfaceKHR(instance, surface, NULL);
+
+    if (enableValidationLayers) {
+        DestroyDebugUtilsMessengerEXT(instance, debugMessenger, NULL);
+    }
+
+    vkDestroyInstance(instance, NULL);
+    glfwDestroyWindow(window);
+    glfwTerminate();
 
     return 0;
 }

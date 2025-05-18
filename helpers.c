@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <vulkan/vulkan_core.h>
 
-void displayEXT() {
+void displayInstanceExtensions() {
     uint32_t extensionCount = 0;
 
     if (vkEnumerateInstanceExtensionProperties(NULL, &extensionCount, NULL) !=
@@ -29,7 +29,7 @@ void displayEXT() {
     fprintf(stdout, "\n");
 }
 
-void displayRequiredEXT(uint32_t extensionCount, const char **extensions) {
+void displayRequiredInstanceExtensions(uint32_t extensionCount, const char **extensions) {
     fprintf(stdout, "Number of required extensions %d:\n", extensionCount);
     for (uint32_t i; i < extensionCount; i++) {
         fprintf(stdout, "\t%s\n", extensions[i]);
@@ -42,6 +42,15 @@ void displayAvailableLayers(uint32_t availableLayerCount,
     fprintf(stdout, "There are %d avaiable layers:\n", availableLayerCount);
     for (uint32_t i; i < availableLayerCount; i++) {
         fprintf(stdout, "\t%s\n", availableLayers[i].layerName);
+    }
+    fprintf(stdout, "\n");
+}
+
+void displayAvailableExtensions(uint32_t availableExtensionCount,
+                            VkExtensionProperties *availableExtensions) {
+    fprintf(stdout, "There are %d avaiable layers:\n", availableExtensionCount);
+    for (uint32_t i; i < availableExtensionCount; i++) {
+        fprintf(stdout, "\t%s\n", availableExtensions[i].extensionName);
     }
     fprintf(stdout, "\n");
 }
