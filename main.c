@@ -213,44 +213,6 @@ VkInstance createInstance() {
     return instance;
 };
 
-typedef struct {
-    bool has_graphics;
-    uint32_t graphicsFamily;
-    bool has_presentation;
-    uint32_t presentationFamily;
-} QueueFamilyIndices;
-
-QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device,
-                                     VkSurfaceKHR surface) {
-    QueueFamilyIndices indices = {.has_graphics = false,
-                                  .has_presentation = false};
-
-    uint32_t queueFamilyCount;
-    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, NULL);
-
-    VkQueueFamilyProperties queueFamilies[queueFamilyCount];
-    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount,
-                                             queueFamilies);
-
-    for (uint32_t i = 0; i < queueFamilyCount; i++) {
-        if (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-            indices.graphicsFamily = i;
-            indices.has_graphics = true;
-        }
-
-        VkBool32 presentSupport;
-        vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface,
-                                             &presentSupport);
-
-        if (presentSupport) {
-            indices.has_presentation = true;
-            indices.presentationFamily = i;
-        }
-    }
-
-    return indices;
-}
-
 int32_t getGraphicsFamily(VkPhysicalDevice device) {
 
     uint32_t queueFamilyCount;
