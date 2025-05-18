@@ -1,3 +1,5 @@
+#pragma once
+
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -5,7 +7,6 @@
 
 void displayEXT() {
     uint32_t extensionCount = 0;
-    VkExtensionProperties extensions[256];
 
     if (vkEnumerateInstanceExtensionProperties(NULL, &extensionCount, NULL) !=
         VK_SUCCESS) {
@@ -13,8 +14,7 @@ void displayEXT() {
         exit(1);
     }
 
-    if (extensionCount > 256)
-        extensionCount = 256; // truncate to fit on array
+    VkExtensionProperties extensions[extensionCount];
 
     if (vkEnumerateInstanceExtensionProperties(NULL, &extensionCount,
                                                extensions) != VK_SUCCESS) {
