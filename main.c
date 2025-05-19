@@ -298,14 +298,19 @@ bool isDeviceSuitable(VkPhysicalDevice device, VkSurfaceKHR surface) {
     uint32_t formatCount;
     vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, NULL);
 
+    if (formatCount == 0)
+        return false;
+
     uint32_t presentationCount;
     vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface,
                                               &presentationCount, NULL);
-    if (formatCount == 0 || presentationCount == 0)
+    if (presentationCount == 0)
         return false;
 
-    if (getGraphicsFamily(device) == -1 ||
-        getPresentationFamily(device, surface) == -1)
+    if (getGraphicsFamily(device) == -1)
+        return false;
+
+    if (getPresentationFamily(device, surface) == -1)
         return false;
 
     return true;
@@ -529,6 +534,7 @@ VkSwapchainKHR createSwapchain(VkDevice device, VkPhysicalDevice physicalDevice,
         imageCount > capabilities.maxImageCount) {
         imageCount = capabilities.maxImageCount;
     }
+
     VkSwapchainCreateInfoKHR createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     createInfo.surface = surface;
@@ -649,7 +655,7 @@ int main() {
         glfwPollEvents();
     }
 
-    for (uint32_t i=0; i<imageCount; i++){
+    for (uint32_t i = 0; i < imageCount; i++) {
         vkDestroyImageView(device, swapchainImageViews[i], NULL);
     }
 
