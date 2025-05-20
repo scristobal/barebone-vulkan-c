@@ -1,9 +1,11 @@
 #include "helpers.c"
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/mman.h>
 #include <sys/types.h>
 #include <vulkan/vulkan_core.h>
 
@@ -603,6 +605,58 @@ void createImageViews(VkDevice device, VkImageView *imageViews, VkImage *images,
     }
 }
 
+VkShaderModule createShaderModule(VkDevice device, void *code,
+                                  size_t codeCount) {
+    VkShaderModuleCreateInfo createInfo = {};
+    createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    createInfo.codeSize = codeCount;
+    createInfo.pCode = code;
+
+    VkShaderModule shaderModule;
+    if (vkCreateShaderModule(device, &createInfo, NULL, &shaderModule) !=
+        VK_SUCCESS) {
+        fprintf(stderr, "ERROR: failed to create shader module.\n");
+        exit(1);
+    }
+
+    return shaderModule;
+}
+
+void createGraphicsPipeline(VkDevice device) {
+    size_t vertShaderCodeCount;
+    void *vertShaderCode = mmap_file_read("vert.spv", &vertShaderCodeCount);
+    if (!vertShaderCode) {
+        fprintf(stderr, "ERROR: failed to read SPIR-V vertex shader.\n");
+        exit(1);
+    }
+
+    VkShaderModule vertShaderModule =
+        createShaderModule(device, vertShaderCode, vertShaderCodeCount);
+
+    if (munmap(vertShaderCode, vertShaderCodeCount) == -1) {
+        fprintf(stderr, "ERROR: failed to close SPIR-V vertex shader.\n");
+    }
+
+    size_t fragShaderCodeCount;
+    void *fragShaderCode = mmap_file_read("vert.spv", &fragShaderCodeCount);
+    if (!fragShaderCode) {
+        fprintf(stderr, "ERROR: failed to read SPIR-V fragment shader.\n");
+        exit(1);
+    }
+
+    VkShaderModule fragShaderModule =
+        createShaderModule(device, fragShaderCode, fragShaderCodeCount);
+
+    if (munmap(fragShaderCode, fragShaderCodeCount) == -1) {
+        fprintf(stderr, "ERROR: failed to close SPIR-V fragment shader.\n");
+    }
+
+    // cont.
+
+    vkDestroyShaderModule(device, fragShaderModule, NULL);
+    vkDestroyShaderModule(device, vertShaderModule, NULL);
+}
+
 int main() {
     GLFWwindow *window = initWindow();
 
@@ -643,6 +697,8 @@ int main() {
     VkImageView swapchainImageViews[imageCount];
     createImageViews(device, swapchainImageViews, swapchainImages, imageCount,
                      format);
+
+    createGraphicsPipeline(device);
 
     // random code to test cglm works
     mat4 matrix;

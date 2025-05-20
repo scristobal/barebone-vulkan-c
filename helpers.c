@@ -69,3 +69,63 @@ void displayDevices(VkPhysicalDevice *devices, uint32_t deviceCount) {
         displayDevice(&devices[i]);
     }
 }
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+
+/**
+ * Maps the contents of a file into memory (read-only).
+ *
+ * Note: Caller must call munmap(ptr, size). Example:
+ *
+ * ```c
+ * size_t size;
+ * void *data = mmap_file_read("example.txt", &size);
+ * if (!data) {
+ *   return 1;
+ * }
+ *
+ * // Cleanup
+ * if (munmap(data, size) == -1) {
+ *   perror("munmap");
+ *   return 1;
+ * }
+ * ```
+ *
+ */
+void *mmap_file_read(const char *path, size_t *size_out) {
+    if (!path || !size_out) return NULL;
+
+    int fd = open(path, O_RDONLY);
+    if (fd == -1) {
+        return NULL;
+    }
+
+    struct stat st;
+    if (fstat(fd, &st) == -1) {
+        close(fd);
+        return NULL;
+    }
+
+    if (st.st_size == 0) {
+        close(fd);
+        return NULL;
+    }
+
+    void *mapped = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+    if (mapped == MAP_FAILED) {
+        close(fd);
+        return NULL;
+    }
+
+    close(fd);
+
+    *size_out = (size_t)st.st_size;
+    return mapped;
+}
+
+
