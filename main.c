@@ -749,14 +749,11 @@ void createGraphicsPipeline(VkDevice device, VkExtent2D extent) {
 
     VkPipelineColorBlendStateCreateInfo colorBlending = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-        .logicOpEnable = VK_FALSE,
-        .logicOp = VK_LOGIC_OP_COPY, // Optional
         .attachmentCount = 1,
         .pAttachments = &colorBlendAttachment,
-        .blendConstants[0] = 0.0f, // Optional
-        .blendConstants[1] = 0.0f, // Optional
-        .blendConstants[2] = 0.0f, // Optional
-        .blendConstants[3] = 0.0f, // Optional
+        .logicOpEnable = VK_FALSE,   // if VK_TRUE values below would be used
+        .logicOp = VK_LOGIC_OP_COPY, // Optional
+        .blendConstants = {0.0f, 0.0f, 0.0f, 0.0f}, // Optional
     };
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo = {
