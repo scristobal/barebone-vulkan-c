@@ -624,7 +624,50 @@ VkShaderModule createShaderModule(VkDevice device, void *code,
     return shaderModule;
 }
 
-void createGraphicsPipeline(VkDevice device, VkExtent2D extent) {
+VkRenderPass createRenderPass(VkDevice device, VkFormat format) {
+    VkAttachmentDescription colorAttachment = {
+        .format = format,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+        .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+    };
+
+    VkAttachmentReference colorAttachmentRef = {
+        .attachment = 0,
+        .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+    };
+
+    VkSubpassDescription subpass = {
+        .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+        .colorAttachmentCount = 1,
+        .pColorAttachments = &colorAttachmentRef,
+    };
+
+    VkRenderPassCreateInfo renderPassInfo = {
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+        .attachmentCount = 1,
+        .pAttachments = &colorAttachment,
+        .subpassCount = 1,
+        .pSubpasses = &subpass,
+    };
+
+    VkRenderPass renderPass;
+
+    if (vkCreateRenderPass(device, &renderPassInfo, NULL, &renderPass) !=
+        VK_SUCCESS) {
+        fprintf(stderr, "ERROR: failed to create reander pass.\n");
+        exit(1);
+    };
+
+    return renderPass;
+}
+
+VkShaderModule createVertexModule(VkDevice device) {
+
     size_t vertShaderCodeCount;
     void *vertShaderCode = mmap_file_read("vert.spv", &vertShaderCodeCount);
     if (!vertShaderCode) {
@@ -639,8 +682,12 @@ void createGraphicsPipeline(VkDevice device, VkExtent2D extent) {
         fprintf(stderr, "ERROR: failed to close SPIR-V vertex shader.\n");
     }
 
+    return vertShaderModule;
+}
+
+VkShaderModule createFragmentModule(VkDevice device) {
     size_t fragShaderCodeCount;
-    void *fragShaderCode = mmap_file_read("vert.spv", &fragShaderCodeCount);
+    void *fragShaderCode = mmap_file_read("frag.spv", &fragShaderCodeCount);
     if (!fragShaderCode) {
         fprintf(stderr, "ERROR: failed to read SPIR-V fragment shader.\n");
         exit(1);
@@ -653,6 +700,15 @@ void createGraphicsPipeline(VkDevice device, VkExtent2D extent) {
         fprintf(stderr, "ERROR: failed to close SPIR-V fragment shader.\n");
     }
 
+    return fragShaderModule;
+}
+
+VkPipeline createGraphicsPipeline(VkDevice device,
+                                  VkPipelineLayout pipelineLayout,
+                                  VkRenderPass renderPass, VkExtent2D extent,
+                                  VkShaderModule vertShaderModule,
+                                  VkShaderModule fragShaderModule) {
+
     VkPipelineShaderStageCreateInfo vertShaderStageInfo = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
         .stage = VK_SHADER_STAGE_VERTEX_BIT,
@@ -661,7 +717,7 @@ void createGraphicsPipeline(VkDevice device, VkExtent2D extent) {
     };
 
     VkPipelineShaderStageCreateInfo fragShaderStageInfo = {
-        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
         .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
         .module = fragShaderModule,
         .pName = "main",
@@ -735,6 +791,12 @@ void createGraphicsPipeline(VkDevice device, VkExtent2D extent) {
         .depthBiasSlopeFactor = 0.0f,    // Optional
     };
 
+    VkPipelineMultisampleStateCreateInfo multisampling = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+        .sampleShadingEnable = VK_FALSE,
+        .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+    };
+
     VkPipelineColorBlendAttachmentState colorBlendAttachment = {
         .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
                           VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
@@ -756,6 +818,38 @@ void createGraphicsPipeline(VkDevice device, VkExtent2D extent) {
         .blendConstants = {0.0f, 0.0f, 0.0f, 0.0f}, // Optional
     };
 
+    VkGraphicsPipelineCreateInfo pipelineInfo = {
+        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+        .stageCount = 2,
+        .pStages = shaderStages,
+        .pVertexInputState = &vertexInputInfo,
+        .pInputAssemblyState = &inputAssembly,
+        .pViewportState = &viewportState,
+        .pRasterizationState = &rasterizer,
+        .pMultisampleState = &multisampling,
+        .pDepthStencilState = NULL, // Optional
+        .pColorBlendState = &colorBlending,
+        .pDynamicState = &dynamicState,
+        .layout = pipelineLayout,
+        .renderPass = renderPass,
+        .subpass = 0,
+        .basePipelineHandle = VK_NULL_HANDLE, // Optional
+        .basePipelineIndex = -1,              // Optional
+    };
+
+    VkPipeline graphicsPipeline;
+
+    if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo,
+                                  NULL, &graphicsPipeline) != VK_SUCCESS) {
+        fprintf(stderr, "ERROR: failed to create graphics pipeline.\n");
+        exit(1);
+    }
+
+    return graphicsPipeline;
+};
+
+VkPipelineLayout createGraphicsPipelineLayout(VkDevice device) {
+
     VkPipelineLayoutCreateInfo pipelineLayoutInfo = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .setLayoutCount = 0,         // Optional
@@ -772,9 +866,7 @@ void createGraphicsPipeline(VkDevice device, VkExtent2D extent) {
         exit(1);
     }
 
-    vkDestroyPipelineLayout(device, pipelineLayout, NULL);
-    vkDestroyShaderModule(device, fragShaderModule, NULL);
-    vkDestroyShaderModule(device, vertShaderModule, NULL);
+    return pipelineLayout;
 }
 
 int main() {
@@ -818,7 +910,17 @@ int main() {
     createImageViews(device, swapchainImageViews, swapchainImages, imageCount,
                      format);
 
-    createGraphicsPipeline(device, extent);
+    VkRenderPass renderPass = createRenderPass(device, format.format);
+
+    VkShaderModule vertShaderModule = createVertexModule(device);
+    VkShaderModule fragShaderModule = createFragmentModule(device);
+
+    VkPipelineLayout graphicsPipelineLayout =
+        createGraphicsPipelineLayout(device);
+
+    VkPipeline graphicsPipeline =
+        createGraphicsPipeline(device, graphicsPipelineLayout, renderPass,
+                               extent, vertShaderModule, fragShaderModule);
 
     // random code to test cglm works
     mat4 matrix;
@@ -830,6 +932,14 @@ int main() {
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
     }
+
+    // clean up
+    vkDestroyShaderModule(device, fragShaderModule, NULL);
+    vkDestroyShaderModule(device, vertShaderModule, NULL);
+
+    vkDestroyPipeline(device, graphicsPipeline, NULL);
+    vkDestroyPipelineLayout(device, graphicsPipelineLayout, NULL);
+    vkDestroyRenderPass(device, renderPass, NULL);
 
     for (uint32_t i = 0; i < imageCount; i++) {
         vkDestroyImageView(device, swapchainImageViews[i], NULL);
