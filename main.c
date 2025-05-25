@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/types.h>
@@ -606,24 +607,6 @@ void createImageViews(VkDevice device, VkImageView *imageViews, VkImage *images,
     }
 }
 
-VkShaderModule createShaderModule(VkDevice device, void *code,
-                                  size_t codeCount) {
-    VkShaderModuleCreateInfo createInfo = {
-        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-        .codeSize = codeCount,
-        .pCode = code,
-    };
-
-    VkShaderModule shaderModule;
-    if (vkCreateShaderModule(device, &createInfo, NULL, &shaderModule) !=
-        VK_SUCCESS) {
-        fprintf(stderr, "ERROR: failed to create shader module.\n");
-        exit(1);
-    }
-
-    return shaderModule;
-}
-
 VkRenderPass createRenderPass(VkDevice device, VkFormat format) {
     VkAttachmentDescription colorAttachment = {
         .format = format,
@@ -666,41 +649,54 @@ VkRenderPass createRenderPass(VkDevice device, VkFormat format) {
     return renderPass;
 }
 
-VkShaderModule createVertexModule(VkDevice device) {
-
-    size_t vertShaderCodeCount;
-    void *vertShaderCode = mmap_file_read("vert.spv", &vertShaderCodeCount);
-    if (!vertShaderCode) {
-        fprintf(stderr, "ERROR: failed to read SPIR-V vertex shader.\n");
+VkShaderModule createShaderModule(VkDevice device, const char *filename) {
+    size_t codeCount;
+    void *code = mmap_file_read(filename, &codeCount);
+    if (!code) {
+        fprintf(stderr, "ERROR: failed to read %s.\n", filename);
         exit(1);
     }
 
-    VkShaderModule vertShaderModule =
-        createShaderModule(device, vertShaderCode, vertShaderCodeCount);
+    VkShaderModuleCreateInfo createInfo = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .codeSize = codeCount,
+        .pCode = code,
+    };
 
-    if (munmap(vertShaderCode, vertShaderCodeCount) == -1) {
-        fprintf(stderr, "ERROR: failed to close SPIR-V vertex shader.\n");
+    VkShaderModule shaderModule;
+    if (vkCreateShaderModule(device, &createInfo, NULL, &shaderModule) !=
+        VK_SUCCESS) {
+        fprintf(stderr, "ERROR: failed to create %s shader module.\n",
+                filename);
+        exit(1);
     }
 
-    return vertShaderModule;
+    if (munmap(code, codeCount) == -1) {
+        fprintf(stderr, "ERROR: failed to close %s.\n", filename);
+    }
+
+    return shaderModule;
 }
 
-VkShaderModule createFragmentModule(VkDevice device) {
-    size_t fragShaderCodeCount;
-    void *fragShaderCode = mmap_file_read("frag.spv", &fragShaderCodeCount);
-    if (!fragShaderCode) {
-        fprintf(stderr, "ERROR: failed to read SPIR-V fragment shader.\n");
+VkPipelineLayout createGraphicsPipelineLayout(VkDevice device) {
+
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .setLayoutCount = 0,         // Optional
+        .pSetLayouts = NULL,         // Optional
+        .pushConstantRangeCount = 0, // Optional
+        .pPushConstantRanges = NULL, // Optional
+    };
+
+    VkPipelineLayout pipelineLayout;
+
+    if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, NULL,
+                               &pipelineLayout) != VK_SUCCESS) {
+        fprintf(stderr, "ERROR: failed to create pipeline layout.\n");
         exit(1);
     }
 
-    VkShaderModule fragShaderModule =
-        createShaderModule(device, fragShaderCode, fragShaderCodeCount);
-
-    if (munmap(fragShaderCode, fragShaderCodeCount) == -1) {
-        fprintf(stderr, "ERROR: failed to close SPIR-V fragment shader.\n");
-    }
-
-    return fragShaderModule;
+    return pipelineLayout;
 }
 
 VkPipeline createGraphicsPipeline(VkDevice device,
@@ -848,25 +844,131 @@ VkPipeline createGraphicsPipeline(VkDevice device,
     return graphicsPipeline;
 };
 
-VkPipelineLayout createGraphicsPipelineLayout(VkDevice device) {
+void createFramebuffers(VkDevice device, VkFramebuffer *swapchainFramebuffers,
+                        uint32_t swapchainFramebuffersCount,
+                        VkImageView *swapchainImageViews,
+                        VkRenderPass renderPass, VkExtent2D extent) {
+    for (uint32_t i = 0; i < swapchainFramebuffersCount; i++) {
+        VkImageView attachments[] = {swapchainImageViews[i]};
 
-    VkPipelineLayoutCreateInfo pipelineLayoutInfo = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-        .setLayoutCount = 0,         // Optional
-        .pSetLayouts = NULL,         // Optional
-        .pushConstantRangeCount = 0, // Optional
-        .pPushConstantRanges = NULL, // Optional
+        VkFramebufferCreateInfo framebufferInfo = {
+            .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+            .renderPass = renderPass,
+            .attachmentCount = 1,
+            .pAttachments = attachments,
+            .width = extent.width,
+            .height = extent.height,
+            .layers = 1,
+        };
+
+        if (vkCreateFramebuffer(device, &framebufferInfo, NULL,
+                                &swapchainFramebuffers[i]) != VK_SUCCESS) {
+            fprintf(stderr, "ERROR: failed to create framebuffer.\n");
+            exit(1);
+        }
+    };
+}
+
+VkCommandPool createCommandPool(VkDevice device,
+                                VkPhysicalDevice physicalDevice) {
+
+    int32_t graphicsFamilyIndex = getGraphicsFamily(physicalDevice);
+
+    VkCommandPoolCreateInfo poolInfo = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+        .queueFamilyIndex = graphicsFamilyIndex,
     };
 
-    VkPipelineLayout pipelineLayout;
+    VkCommandPool commandPool;
 
-    if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, NULL,
-                               &pipelineLayout) != VK_SUCCESS) {
-        fprintf(stderr, "ERROR: failed to create pipeline layout.\n");
+    if (vkCreateCommandPool(device, &poolInfo, NULL, &commandPool) !=
+        VK_SUCCESS) {
+        fprintf(stderr, "ERROR: failed to create command pool.\n");
+        exit(1);
+    };
+
+    return commandPool;
+}
+
+VkCommandBuffer createCommandBuffer(VkDevice device,
+                                    VkCommandPool commandPool) {
+
+    VkCommandBufferAllocateInfo allocInfo = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .commandPool = commandPool,
+        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = 1,
+    };
+
+    VkCommandBuffer commandBuffer;
+
+    if (vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer) !=
+        VK_SUCCESS) {
+        fprintf(stderr, "ERROR: failed to allocate command buffers.\n");
         exit(1);
     }
 
-    return pipelineLayout;
+    return commandBuffer;
+}
+
+void recordCommandBuffer(VkCommandBuffer commandBuffer, VkRenderPass renderPass,
+                         VkFramebuffer framebuffer, VkExtent2D extent) {
+    VkCommandBufferBeginInfo beginInfo = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = 0,               // Optional
+        .pInheritanceInfo = NULL, // Optional
+    };
+
+    if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
+        fprintf(stderr, "ERROR: failed to begin recording command buffer.\n");
+        exit(1);
+    };
+
+    VkOffset2D offset = {
+        .x = 0.0f,
+        .y = 0.0f,
+    };
+
+    VkClearValue clearColor = {.color = {0.0f, 0.0f, 0.0f, 0.0f}};
+
+    VkRenderPassBeginInfo renderPassInfo = {
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+        .renderPass = renderPass,
+        .framebuffer = framebuffer,
+        .renderArea.offset = offset,
+        .renderArea.extent = extent,
+        .clearValueCount = 1,
+        .pClearValues = &clearColor,
+    };
+
+    vkCmdBeginRenderPass(commandBuffer, &renderPassInfo,
+                         VK_SUBPASS_CONTENTS_INLINE);
+
+    VkViewport viewport = {
+        .x = 0.0f,
+        .y = 0.0f,
+        .width = (float)(extent.width),
+        .height = (float)(extent.height),
+        .minDepth = 0.0f,
+        .maxDepth = 1.0f,
+    };
+    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+
+    VkRect2D scissor = {
+        .offset = offset,
+        .extent = extent,
+    };
+    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+
+    vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+
+    vkCmdEndRenderPass(commandBuffer);
+
+    if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
+        fprintf(stderr, "ERROR: failed to record command buffer.\n");
+        exit(1);
+    }
 }
 
 int main() {
@@ -912,8 +1014,8 @@ int main() {
 
     VkRenderPass renderPass = createRenderPass(device, format.format);
 
-    VkShaderModule vertShaderModule = createVertexModule(device);
-    VkShaderModule fragShaderModule = createFragmentModule(device);
+    VkShaderModule vertShaderModule = createShaderModule(device, "vert.spv");
+    VkShaderModule fragShaderModule = createShaderModule(device, "frag.spv");
 
     VkPipelineLayout graphicsPipelineLayout =
         createGraphicsPipelineLayout(device);
@@ -921,6 +1023,13 @@ int main() {
     VkPipeline graphicsPipeline =
         createGraphicsPipeline(device, graphicsPipelineLayout, renderPass,
                                extent, vertShaderModule, fragShaderModule);
+
+    VkFramebuffer swapchainFramebuffers[imageCount];
+    createFramebuffers(device, swapchainFramebuffers, imageCount,
+                       swapchainImageViews, renderPass, extent);
+
+    VkCommandPool commandPool = createCommandPool(device, physicalDevice);
+    VkCommandBuffer commandBuffer = createCommandBuffer(device, commandPool);
 
     // random code to test cglm works
     mat4 matrix;
@@ -934,8 +1043,14 @@ int main() {
     }
 
     // clean up
+    vkDestroyCommandPool(device, commandPool, NULL);
+
     vkDestroyShaderModule(device, fragShaderModule, NULL);
     vkDestroyShaderModule(device, vertShaderModule, NULL);
+
+    for (uint32_t i = 0; i < imageCount; i++) {
+        vkDestroyFramebuffer(device, swapchainFramebuffers[i], NULL);
+    }
 
     vkDestroyPipeline(device, graphicsPipeline, NULL);
     vkDestroyPipelineLayout(device, graphicsPipelineLayout, NULL);
