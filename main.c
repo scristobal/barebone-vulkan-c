@@ -475,7 +475,6 @@ VkSurfaceFormatKHR chooseSurfaceFormat(VkPhysicalDevice device,
 
 VkPresentModeKHR choosePresentMode(VkPhysicalDevice device,
                                    VkSurfaceKHR surface) {
-
     uint32_t presentModeCount;
     vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface,
                                               &presentModeCount, NULL);
@@ -871,7 +870,6 @@ void createFramebuffers(VkDevice device, VkFramebuffer *swapchainFramebuffers,
 
 VkCommandPool createCommandPool(VkDevice device,
                                 VkPhysicalDevice physicalDevice) {
-
     int32_t graphicsFamilyIndex = getGraphicsFamily(physicalDevice);
 
     VkCommandPoolCreateInfo poolInfo = {
@@ -893,7 +891,6 @@ VkCommandPool createCommandPool(VkDevice device,
 
 VkCommandBuffer createCommandBuffer(VkDevice device,
                                     VkCommandPool commandPool) {
-
     VkCommandBufferAllocateInfo allocInfo = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
         .commandPool = commandPool,
