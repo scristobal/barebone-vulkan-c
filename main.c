@@ -910,7 +910,8 @@ VkCommandBuffer createCommandBuffer(VkDevice device,
 }
 
 void recordCommandBuffer(VkCommandBuffer commandBuffer, VkRenderPass renderPass,
-                         VkFramebuffer framebuffer, VkExtent2D extent) {
+                         VkFramebuffer framebuffer, VkPipeline graphicsPipeline,
+                         VkExtent2D extent) {
     VkCommandBufferBeginInfo beginInfo = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
         .flags = 0,               // Optional
@@ -942,6 +943,9 @@ void recordCommandBuffer(VkCommandBuffer commandBuffer, VkRenderPass renderPass,
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo,
                          VK_SUBPASS_CONTENTS_INLINE);
 
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                      graphicsPipeline);
+
     VkViewport viewport = {
         .x = 0.0f,
         .y = 0.0f,
@@ -966,6 +970,38 @@ void recordCommandBuffer(VkCommandBuffer commandBuffer, VkRenderPass renderPass,
         fprintf(stderr, "ERROR: failed to record command buffer.\n");
         exit(1);
     }
+}
+
+VkSemaphore createSemaphore(VkDevice device) {
+    VkSemaphoreCreateInfo semaphoreInfo = {
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+    };
+
+    VkSemaphore semaphore;
+
+    if (vkCreateSemaphore(device, &semaphoreInfo, NULL, &semaphore) !=
+        VK_SUCCESS) {
+        fprintf(stderr, "ERROR: failed to create semaphore.\n");
+        exit(1);
+    }
+
+    return semaphore;
+}
+
+VkFence createFence(VkDevice device) {
+    VkFenceCreateInfo fenceInfo = {
+        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+        .flags = VK_FENCE_CREATE_SIGNALED_BIT,
+    };
+
+    VkFence fence;
+
+    if (vkCreateFence(device, &fenceInfo, NULL, &fence) != VK_SUCCESS) {
+        fprintf(stderr, "ERROR: failed to create fence.\n");
+        exit(1);
+    };
+
+    return fence;
 }
 
 int main() {
@@ -1028,6 +1064,22 @@ int main() {
     VkCommandPool commandPool = createCommandPool(device, physicalDevice);
     VkCommandBuffer commandBuffer = createCommandBuffer(device, commandPool);
 
+    VkSemaphore imageAvailableSemaphore = createSemaphore(device);
+    VkSemaphore renderFinishedSemaphore = createSemaphore(device);
+    VkFence inFlightFence = createFence(device);
+
+    // draw
+    vkWaitForFences(device, 1, &inFlightFence, VK_TRUE, UINT64_MAX);
+    vkResetFences(device, 1, &inFlightFence);
+
+    uint32_t imageIndex;
+    vkAcquireNextImageKHR(device, swapchain, UINT64_MAX,
+                          imageAvailableSemaphore, inFlightFence, &imageIndex);
+    vkResetCommandBuffer(commandBuffer, 0);
+    recordCommandBuffer(commandBuffer, renderPass,
+                        swapchainFramebuffers[imageIndex], graphicsPipeline,
+                        extent);
+
     // random code to test cglm works
     mat4 matrix;
     vec4 vec;
@@ -1040,6 +1092,10 @@ int main() {
     }
 
     // clean up
+    vkDestroySemaphore(device, imageAvailableSemaphore, NULL);
+    vkDestroySemaphore(device, renderFinishedSemaphore, NULL);
+    vkDestroyFence(device, inFlightFence, NULL);
+
     vkDestroyCommandPool(device, commandPool, NULL);
 
     vkDestroyShaderModule(device, fragShaderModule, NULL);
