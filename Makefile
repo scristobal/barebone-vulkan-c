@@ -2,6 +2,8 @@ CC ?= gcc
 CFLAGS = -std=c99 -O2
 LDFLAGS = -lglfw -lvulkan -ldl -lpthread -lX11 -lXxf86vm -lXrandr -lXi
 
+default: test
+
 vert.spv: shader.vert
 	glslc shader.vert -o vert.spv
 
